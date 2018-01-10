@@ -9,7 +9,14 @@ server:
 #spring.jpa.hibernate.ddl-auto=update
 #spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.Oracle12cDialect
 #spring.jpa.hibernate.naming-strategy = org.hibernate.cfg.ImprovedNamingStrategy
+service_bus:
+  consumerQueue: auditConsumerQueue
+  deadLetterQueue: dditDeadLetterQueue
 
+jms:
+  username: admin
+  password: admin
+  remoteUri: amqp://victor:5672?maximumConnections=1000&wireFormat.maxFrameSize=1048
 # Database
 db:
   driver: oracle.jdbc.driver.OracleDriver
@@ -23,4 +30,4 @@ hibernate:
   show_sql: true
   hbm2ddl.auto: create-update
 
-entitymanager.packagesToScan: com.vm.audit
+entitymanager.packagesToScan: com.vm.jms

@@ -15,7 +15,7 @@
         </encoder>
     </appender>
 
-    <logger name="com.vm.audit" level="ALL" additivity="false">
+    <logger name="com.vm.jms" level="ALL" additivity="false">
         <appender-ref ref="FILE-ENGINE"/>
     </logger>
 
