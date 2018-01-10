@@ -18,7 +18,7 @@ import javax.persistence.Id;
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -32,6 +32,8 @@ public class EntityAuditListenerAspect {
 
     @Value("${service_bus.consumerQueue}")
     private String consumerQueue;
+
+    ForkJoinPool forkJoinPool = ForkJoinPool.commonPool();
 
     private Object id;
 
@@ -63,22 +65,30 @@ public class EntityAuditListenerAspect {
         if(entity.getClass().getName().contains("Audit"))
             return;
 
-        ObjectMapper objectMapper = new ObjectMapper();
-        String auditString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);
-        log.info("Audit Json String: "+auditString);
-        Map<String, Object> headers =  new HashMap<>();
-        if(id != null){
-            if(signature.getName().contains("delete")){
-                headers.put("actionType", ActonType.DELETED.toString());
-            }else {
-                headers.put("actionType", ActonType.UPDATED.toString());
+        CompletableFuture.supplyAsync(() -> {
+            ObjectMapper objectMapper = new ObjectMapper();
+            try {
+                String auditString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);
+                log.info("Audit Json String: "+auditString);
+                Map<String, Object> headers =  new HashMap<>();
+                if(id != null){
+                    if(signature.getName().contains("delete")){
+                        headers.put("actionType", ActonType.DELETED.toString());
+                    }else {
+                        headers.put("actionType", ActonType.UPDATED.toString());
+                    }
+                }else {
+                    headers.put("actionType", ActonType.INSERTED.toString());
+                }
+                headers.put(entity.getClass().getSimpleName(), entity.getClass().getSimpleName());
+                log.info("Audit Headers: "+headers);
+               producerTemplate.sendBodyAndHeaders("amqp:queue"+ consumerQueue, ExchangePattern.InOnly,
+                        auditString, headers);
+                return auditString;
+            } catch (JsonProcessingException e) {
+                log.info("Serialization Exception: "+e.getMessage());
+                throw new CompletionException(e);
             }
-        }else {
-            headers.put("actionType", ActonType.INSERTED.toString());
-        }
-        headers.put(entity.getClass().getSimpleName(), entity.getClass().getSimpleName());
-        log.info("Audit Headers: "+headers);
-
-        CompletableFuture.supplyAsync(() -> producerTemplate.sendBodyAndHeaders("amqp:queue"+ consumerQueue, ExchangePattern.InOnly,auditString, headers));
+        }).thenAcceptAsync(value -> log.info("Message Successfully pushed. "+value));
     }
 }
